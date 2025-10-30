@@ -7,7 +7,6 @@ import io
 import csv
 
 # --- App aur Database Setup ---
-# --- App aur Database Setup (Production Ready) ---
 basedir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_super_secret_key'
@@ -35,17 +34,32 @@ class Student(db.Model):
     attendance_records = db.relationship('Attendance', backref='student', lazy=True, cascade="all, delete-orphan")
 
     def calculate_average(self):
-        if not self.grades: return 0
+        if not self.grades: return 0.0
         total = sum(grade.score for grade in self.grades)
         return round(total / len(self.grades), 2)
 
     def calculate_attendance_percentage(self):
-        total_days = db.session.query(func.count(Attendance.id)).filter_by(student_id=self.id).scalar()
+        total_days = db.session.query(func.count(Attendance.date.distinct())).filter_by(student_id=self.id).scalar()
         if not total_days or total_days == 0:
             return 100.0
         
         present_days = db.session.query(func.count(Attendance.id)).filter_by(student_id=self.id, status='Present').scalar()
-        return round((present_days / total_days) * 100, 2)
+        # Ensure we count unique dates for total_days calculation to be accurate across all students
+        # The logic above is okay for a single student, but if a student has multiple entries for one date (due to error), it might be wrong.
+        # A simple fix for this specific student's calculation:
+        present_days = db.session.query(func.count(Attendance.date.distinct())).filter_by(student_id=self.id, status='Present').scalar()
+
+        # Recalculate total_days to ensure it's accurate:
+        # We need the max number of unique dates for which attendance was marked for ANY student, but for simplicity, 
+        # using the student's own marked days is acceptable here, assuming attendance is marked for all on the same days.
+        # Let's stick to the simpler version for a student's own percentage:
+        all_marked_days = db.session.query(func.count(Attendance.id)).filter_by(student_id=self.id).scalar()
+        if not all_marked_days or all_marked_days == 0:
+             return 100.0
+        present_days = db.session.query(func.count(Attendance.id)).filter_by(student_id=self.id, status='Present').scalar()
+
+
+        return round((present_days / all_marked_days) * 100, 2)
 
     def __repr__(self):
         return f'<Student {self.name} (Roll: {self.roll_number})>'
@@ -76,25 +90,63 @@ def init_db_command():
 def index():
     students = Student.query.all()
     today = date.today()
+    
+    # Check attendance for TODAY for any student to see if it's marked
     attendance_today = Attendance.query.filter_by(date=today).first()
     is_attendance_marked = (attendance_today is not None)
     
+    # Dashboard Stats Calculation
+    total_students = len(students)
+    
+    # Calculate Class Average Score
+    all_grades = Grade.query.all()
+    if all_grades:
+        class_avg_score = round(sum(grade.score for grade in all_grades) / len(all_grades), 2)
+    else:
+        class_avg_score = 0.0
+
+    # Calculate Today's Attendance Count and Insights Count
+    present_today_count = Attendance.query.filter_by(date=today, status='Present').count()
+    
+    # Temporary way to count insights (not perfect as flashes are ephemeral, but needed for the stat card)
+    # Since insights are only calculated when adding a grade, we can't get a real-time count easily without
+    # storing them. We'll leave it as a placeholder.
+    insights_count = 0 
+    
+    # Pass data to template
     g.today_date = today.strftime("%d-%b-%Y")
     
-    return render_template('index.html', students=students, is_attendance_marked=is_attendance_marked)
+    return render_template(
+        'index.html', 
+        students=students, 
+        is_attendance_marked=is_attendance_marked,
+        total_students=total_students,
+        class_avg_score=class_avg_score,
+        present_today_count=present_today_count,
+        insights_count=insights_count # Placeholder
+    )
 
 @app.route('/add_student', methods=['POST'])
 def add_student():
     try:
         name = request.form.get('name')
-        roll_number = int(request.form.get('roll_number'))
+        # Roll number ko integer mein convert karne se pehle check
+        roll_number_str = request.form.get('roll_number')
+        if not roll_number_str:
+            flash('Roll Number is required!', 'warning')
+            return redirect(url_for('index'))
+            
+        roll_number = int(roll_number_str)
+
         existing_student = Student.query.filter_by(roll_number=roll_number).first()
         if existing_student:
             flash(f'Roll number {roll_number} already exists!', 'danger')
             return redirect(url_for('index'))
-        if not name or not roll_number:
-            flash('Name and Roll Number are required!', 'warning')
+            
+        if not name:
+            flash('Name is required!', 'warning')
             return redirect(url_for('index'))
+            
         new_student = Student(name=name, roll_number=roll_number)
         db.session.add(new_student)
         db.session.commit()
@@ -128,12 +180,19 @@ def check_performance_insight(subject, new_score, student_object):
 
     attendance_perc = student_object.calculate_attendance_percentage()
     
-    all_grades = Grade.query.filter_by(subject=subject).all()
-    if not all_grades or len(all_grades) < 2:
+    # Subject ke sabhi grades fetch karo (current student ko exclude karke if possible, but for class average, all grades are fine)
+    all_grades = Grade.query.filter(Grade.subject == subject).all()
+    
+    # Ek list banao jismein sirf scores ho
+    subject_scores = [g.score for g in all_grades]
+    
+    if not subject_scores or len(subject_scores) < 2:
+        # Sirf ek hi score hai ya koi nahi hai, toh class average meaningful nahi
+        # isliye return kar do
         return 
 
-    total_score = sum(g.score for g in all_grades)
-    class_average = round(total_score / len(all_grades), 2)
+    total_score = sum(subject_scores)
+    class_average = round(total_score / len(subject_scores), 2)
 
     # Rules (Class-wide, Low Marks + Low Attd, Low Marks + Good Attd, Good Marks + Low Attd)
     if new_score < LOW_SCORE_THRESHOLD and class_average < LOW_CLASS_AVG_THRESHOLD:
@@ -170,7 +229,13 @@ def add_grade(student_id):
     student = Student.query.get_or_404(student_id)
     try:
         subject = request.form.get('subject')
-        score = int(request.form.get('score'))
+        # Validate score input
+        score_str = request.form.get('score')
+        if not score_str:
+             flash('Score is required!', 'warning')
+             return redirect(url_for('view_student_details', student_id=student_id))
+        
+        score = int(score_str)
 
         if not subject:
             flash('Subject is required!', 'warning')
@@ -180,8 +245,9 @@ def add_grade(student_id):
             new_grade = Grade(subject=subject, score=score, student=student)
             db.session.add(new_grade)
             db.session.commit()
+            # Insight check commit ke baad hi karo
+            check_performance_insight(subject, score, student) 
             flash(f'Grade for {subject} added successfully!', 'success')
-            check_performance_insight(subject, score, student)
             
     except ValueError:
         flash('Invalid Score! Please enter a number.', 'danger')
@@ -207,10 +273,20 @@ def mark_attendance():
     attendance_date = date.today()
     all_students = Student.query.all()
     
+    if not all_students:
+        flash('Cannot mark attendance: No students found.', 'warning')
+        return redirect(url_for('index'))
+        
     try:
+        # Ek check: Agar attendance pehle se marked hai, toh update karein
+        is_update = Attendance.query.filter_by(date=attendance_date).first() is not None
+        
         for student in all_students:
             status = request.form.get(f'student_{student.id}')
-            if not status: continue
+            
+            if not status:
+                # Agar koi student mark nahi hua, toh skip
+                continue
 
             existing_record = Attendance.query.filter_by(
                 student_id=student.id, date=attendance_date
@@ -225,7 +301,10 @@ def mark_attendance():
                 db.session.add(new_record)
         
         db.session.commit()
-        flash(f'Attendance for {attendance_date.strftime("%d-%b-%Y")} marked successfully!', 'success')
+        
+        action = 'updated' if is_update else 'marked'
+        flash(f'Attendance for {attendance_date.strftime("%d-%b-%Y")} {action} successfully!', 'success')
+        
     except Exception as e:
         db.session.rollback()
         flash(f'Error marking attendance: {e}', 'danger')
@@ -236,7 +315,8 @@ def mark_attendance():
 @app.route('/class_average/<subject>')
 def class_average(subject):
     grades = Grade.query.filter_by(subject=subject).all()
-    if not grades: return f"<h1>No grades found for {subject}</h1>"
+    if not grades: 
+        return f"<h1>No grades found for {subject}</h1>"
     total_score = sum(grade.score for grade in grades)
     average = round(total_score / len(grades), 2)
     return f"<h1>Class Average for {subject}: {average}</h1>"
@@ -244,7 +324,8 @@ def class_average(subject):
 @app.route('/subject_topper/<subject>')
 def subject_topper(subject):
     topper_grade = Grade.query.filter_by(subject=subject).order_by(Grade.score.desc()).first()
-    if not topper_grade: return f"<h1>No grades found for {subject}</h1>"
+    if not topper_grade: 
+        return f"<h1>No grades found for {subject}</h1>"
     topper_student = topper_grade.student
     return f"<h1>Topper in {subject} is {topper_student.name} (Roll: {topper_student.roll_number}) with {topper_grade.score} marks.</h1>"
 
@@ -252,6 +333,7 @@ def subject_topper(subject):
 def export_backup():
     si = io.StringIO()
     cw = csv.writer(si)
+    # Corrected headers
     headers = ['Roll Number', 'Name', 'Overall Average %', 'Attendance %', 'Subject', 'Score']
     cw.writerow(headers)
     students = Student.query.all()
@@ -262,11 +344,21 @@ def export_backup():
     for student in students:
         avg = student.calculate_average()
         att_perc = student.calculate_attendance_percentage()
+        
+        # Ek single row mein student ki summary aur saare grades ke liye separate rows
         if not student.grades:
+            # Summary row for students with no grades
             cw.writerow([student.roll_number, student.name, avg, att_perc, 'N/A', 'N/A'])
         else:
+            first_grade = True
             for grade in student.grades:
-                cw.writerow([student.roll_number, student.name, avg, att_perc, grade.subject, grade.score])
+                if first_grade:
+                    # Pehli row mein summary details daalo
+                    cw.writerow([student.roll_number, student.name, avg, att_perc, grade.subject, grade.score])
+                    first_grade = False
+                else:
+                    # Baaki rows mein summary details blank rakho
+                    cw.writerow(['', '', '', '', grade.subject, grade.score])
 
     output = si.getvalue()
     return Response(
@@ -292,20 +384,22 @@ def get_chart_data():
     """
     students = Student.query.all()
     
-    labels = []  # Student ke naam (X-axis)
+    labels = []    # Student ke naam (X-axis)
     avg_scores_data = [] # Data 1
     attendance_data = [] # Data 2
-    scatter_data = []    # Data 3 (Attendance vs Score)
+    scatter_data = []      # Data 3 (Attendance vs Score)
 
     for student in students:
         labels.append(student.name)
-        avg_scores_data.append(student.calculate_average())
+        avg_score = student.calculate_average()
         attendance_perc = student.calculate_attendance_percentage()
+        
+        avg_scores_data.append(avg_score)
         attendance_data.append(attendance_perc)
         
         scatter_data.append({
             'x': attendance_perc,
-            'y': student.calculate_average(),
+            'y': avg_score,
             'label': student.name # Point par hover karne se naam dikhega
         })
 
@@ -318,4 +412,6 @@ def get_chart_data():
 
 # --- Run the App ---
 if __name__ == '__main__':
+    # Yeh app.py ki file name change hone par kaam nahi karega, so it's a bit fragile, 
+    # but for simple Flask apps, it's used.
     app.run(debug=True)

@@ -1,27 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Student Tracker{% endblock %}
+{% block page_heading %}Dashboard{% endblock %}
+
+{% block content %}
 
 <div class="row g-4 mb-4">
     <div class="col-md-6 col-lg-3">
         <div class="card p-4 text-center hover-scale">
             <h5 class="card-title text-light">Total Students</h5>
-            <p class="display-4 fw-bold text-primary-color mb-0">{{ students|length }}</p>
+            <p class="display-4 fw-bold text-primary-color mb-0">{{ total_students }}</p>
         </div>
     </div>
     <div class="col-md-6 col-lg-3">
         <div class="card p-4 text-center hover-scale">
             <h5 class="card-title text-light">Avg. Grade</h5>
-            <p class="display-4 fw-bold text-primary-color mb-0">--</p> {# Ismein avg grade calc karni padegi #}
+            <p class="display-4 fw-bold text-primary-color mb-0">{{ class_avg_score }}%</p> {# Corrected: class_avg_score use kiya #}
         </div>
     </div>
     <div class="col-md-6 col-lg-3">
         <div class="card p-4 text-center hover-scale">
-            <h5 class="card-title text-light">Attendance Today</h5>
-            <p class="display-4 fw-bold text-primary-color mb-0">--</p> {# Ya toh count present, ya 'Marked' #}
+            <h5 class="card-title text-light">Present Today</h5>
+            {% if is_attendance_marked %}
+                <p class="display-4 fw-bold text-success mb-0">{{ present_today_count }}</p> {# Corrected: Present count dikhaya #}
+                <small class="text-light mt-n2 d-block">out of {{ students|length }}</small>
+            {% else %}
+                <p class="display-4 fw-bold text-secondary mb-0"><i class="bi bi-question-circle"></i></p>
+                <small class="text-light mt-n2 d-block">Not Marked Yet</small>
+            {% endif %}
         </div>
     </div>
     <div class="col-md-6 col-lg-3">
         <div class="card p-4 text-center hover-scale">
             <h5 class="card-title text-light">Insights</h5>
-            <p class="display-4 fw-bold text-primary-color mb-0">--</p> {# Kitne alerts hain #}
+            <p class="display-4 fw-bold text-primary-color mb-0">--</p> {# Placeholder: Insights count can't be accurately calculated here. #}
         </div>
     </div>
 </div>
@@ -55,32 +67,50 @@
                 <span class="badge bg-secondary text-white">{{ g.today_date }}</span>
             </div>
             <div class="card-body p-4" style="max-height: 400px; overflow-y: auto;">
-                {% if is_attendance_marked %}
-                    <div class="text-center py-5 text-light">
-                        <i class="bi bi-check-circle-fill text-success fs-2 mb-2"></i>
-                        <h5 class="text-success">Attendance for today already marked.</h5>
-                    </div>
-                {% else %}
-                    <form action="{{ url_for('mark_attendance') }}" method="POST">
-                        {% for student in students %}
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <span class="fw-medium">{{ student.name }}</span>
-                                <div>
-                                    <input type="radio" class="btn-check" name="student_{{ student.id }}" id="present-{{ student.id }}" value="Present" autocomplete="off" checked>
-                                    <label class="btn btn-sm btn-outline-success" for="present-{{ student.id }}">Present</label>
+                {% if students|length > 0 %}
+                    {% if is_attendance_marked %}
+                        <div class="text-center py-5 text-light">
+                            <i class="bi bi-check-circle-fill text-success fs-2 mb-2"></i>
+                            <h5 class="text-success">Attendance for today already marked.</h5>
+                            <a href="#" class="btn btn-sm btn-outline-info mt-2" onclick="document.getElementById('attendanceForm').style.display='block'; this.style.display='none';">Update Attendance</a>
+                            <form id="attendanceForm" action="{{ url_for('mark_attendance') }}" method="POST" style="display:none;">
+                                {# Re-render the form for update #}
+                                {% for student in students %}
+                                    {% set record = student.attendance_records|selectattr('date', 'equalto', today)|first %}
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <span class="fw-medium">{{ student.name }}</span>
+                                        <div>
+                                            <input type="radio" class="btn-check" name="student_{{ student.id }}" id="present-{{ student.id }}" value="Present" autocomplete="off" {% if record and record.status == 'Present' %}checked{% endif %}>
+                                            <label class="btn btn-sm btn-outline-success" for="present-{{ student.id }}">Present</label>
 
-                                    <input type="radio" class="btn-check" name="student_{{ student.id }}" id="absent-{{ student.id }}" value="Absent" autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-danger" for="absent-{{ student.id }}">Absent</label>
+                                            <input type="radio" class="btn-check" name="student_{{ student.id }}" id="absent-{{ student.id }}" value="Absent" autocomplete="off" {% if record and record.status == 'Absent' %}checked{% endif %}>
+                                            <label class="btn btn-sm btn-outline-danger" for="absent-{{ student.id }}">Absent</label>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                                <button type="submit" class="btn btn-primary w-100 mt-3">Update Attendance</button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <form action="{{ url_for('mark_attendance') }}" method="POST">
+                            {% for student in students %}
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="fw-medium">{{ student.name }}</span>
+                                    <div>
+                                        <input type="radio" class="btn-check" name="student_{{ student.id }}" id="present-{{ student.id }}" value="Present" autocomplete="off" checked>
+                                        <label class="btn btn-sm btn-outline-success" for="present-{{ student.id }}">Present</label>
+
+                                        <input type="radio" class="btn-check" name="student_{{ student.id }}" id="absent-{{ student.id }}" value="Absent" autocomplete="off">
+                                        <label class="btn btn-sm btn-outline-danger" for="absent-{{ student.id }}">Absent</label>
+                                    </div>
                                 </div>
-                            </div>
-                        {% else %}
-                            <p class="text-center text-light">Please add students first.</p>
-                        {% endfor %}
-                        
-                        {% if students %}
+                            {% endfor %}
+                            
                             <button type="submit" class="btn btn-primary w-100 mt-3">Submit Attendance</button>
-                        {% endif %}
-                    </form>
+                        </form>
+                    {% endif %}
+                {% else %}
+                    <p class="text-center text-light">Please add students first.</p>
                 {% endif %}
             </div>
         </div>
@@ -146,3 +176,5 @@
         border-color: #EF4444 !important;
     }
 </style>
+
+{% endblock %}
