@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Student Tracker{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"> {# Icons ke liye #}
+
+    <style>
+        :root {
+            --primary-color: #047857; /* Deep Forest Green */
+            --primary-color-rgb: 4, 120, 87;
+            --secondary-color: #34d399; /* Light Mint Green */
+            --text-dark: #1F2937;
+            --text-light: #6B7280;
+            --bg-light: #F9FAFB; /* Off-White background */
+            --white: #FFFFFF;
+            --border-light: #E5E7EB;
+            --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Slightly more pronounced shadow */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif; /* New font for a modern look */
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .wrapper {
+            display: flex;
+            width: 100%;
+        }
+
+        /* --- Sidebar Styles --- */
+        .sidebar {
+            width: 250px;
+            min-width: 250px;
+            background-color: var(--white);
+            border-right: 1px solid var(--border-light);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--card-shadow);
+            z-index: 1000;
+        }
+        .sidebar-header {
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-light);
+            text-align: center;
+        }
+        .sidebar-header h3 {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+        .sidebar-header .logo-icon {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+        }
+        .sidebar-menu {
+            flex-grow: 1;
+        }
+        .sidebar-menu ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .sidebar-menu ul li {
+            margin-bottom: 10px;
+        }
+        .sidebar-menu ul li a {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px; /* Slightly bigger padding */
+            border-radius: 8px;
+            color: var(--text-light);
+            text-decoration: none;
+            transition: all 0.2s ease-in-out;
+            font-weight: 500;
+        }
+        .sidebar-menu ul li a i {
+            margin-right: 10px;
+            font-size: 1.1rem;
+        }
+        .sidebar-menu ul li a.active,
+        .sidebar-menu ul li a:hover {
+            background-color: rgba(var(--primary-color-rgb), 0.1); /* Light green background */
+            color: var(--primary-color);
+        }
+        .sidebar-menu ul li a.active i,
+        .sidebar-menu ul li a:hover i {
+            color: var(--primary-color);
+        }
+        .user-profile-sidebar {
+            display: flex;
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-light);
+        }
+        .user-profile-sidebar img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+            object-fit: cover;
+        }
+        .user-profile-sidebar .user-info span {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        .user-profile-sidebar .user-info small {
+            color: var(--text-light);
+            font-size: 0.8rem;
+        }
+
+        /* --- Main Content Area --- */
+        .main-content {
+            flex-grow: 1;
+            padding: 25px 30px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Top Navbar/Header --- */
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            background-color: var(--white);
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+        }
+        .main-header .page-title {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin: 0;
+        }
+        .main-header .header-controls {
+            display: flex;
+            align-items: center;
+        }
+        .main-header .search-bar {
+            position: relative;
+            margin-right: 20px;
+        }
+        .main-header .search-bar input {
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 8px 12px 8px 35px;
+            font-size: 0.9rem;
+            width: 250px;
+            transition: all 0.2s ease-in-out;
+            background-color: var(--bg-light);
+        }
+        .main-header .search-bar input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+            background-color: var(--white);
+        }
+        .main-header .search-bar i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+        }
+        .main-header .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-left: 15px;
+            cursor: pointer;
+            border: 2px solid var(--primary-color);
+            object-fit: cover;
+        }
+        .main-header .icon-btn {
+            background-color: var(--bg-light);
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.1rem;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .main-header .icon-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+
+        /* --- Card Styles (Increased rounded corners and shadow) --- */
+        .card {
+            background-color: var(--white);
+            border: 1px solid var(--border-light);
+            border-radius: 16px; /* Increased border radius */
+            box-shadow: var(--card-shadow);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: transform 0.3s ease-in-out;
+        }
+        .card:hover.hover-scale { /* Optional hover effect */
+             transform: translateY(-2px);
+        }
+        .card-header { 
+            background-color: transparent !important;
+            border-bottom: 1px solid var(--border-light) !important;
+            padding: 0 0 15px 0 !important;
+            margin-bottom: 20px;
+            color: var(--text-dark);
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .card-body {
+            padding: 0 !important;
+        }
+        .form-label {
+            color: var(--text-light);
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .form-control {
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: var(--text-dark);
+            background-color: var(--white);
+            transition: all 0.2s ease-in-out;
+        }
+        .form-control::placeholder {
+            color: var(--text-light);
+            opacity: 0.7;
+        }
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+            background-color: var(--white);
+        }
+        .btn {
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 500;
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-primary {
+            background-color: var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
+            color: var(--white) !important;
+        }
+        .btn-primary:hover {
+            background-color: #059669 !important; /* Slightly darker green */
+            border-color: #059669 !important;
+        }
+        .btn-info {
+            background-color: var(--secondary-color) !important; /* Light Mint Green */
+            border-color: var(--secondary-color) !important;
+            color: var(--text-dark) !important; /* Dark text for light button */
+        }
+        .btn-info:hover {
+            background-color: #10b981 !important;
+            border-color: #10b981 !important;
+        }
+        .btn-success {
+            background-color: #10B981 !important; /* Brighter Green */
+            border-color: #10B981 !important;
+            color: var(--white) !important;
+        }
+        .btn-danger {
+            background-color: #EF4444 !important; /* Red */
+            border-color: #EF4444 !important;
+            color: var(--white) !important;
+        }
+        .btn-secondary {
+            background-color: #9CA3AF !important;
+            border-color: #9CA3AF !important;
+            color: var(--white) !important;
+        }
+        .badge {
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 6px;
+        }
+        .alert {
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        .text-primary-color {
+            color: var(--primary-color);
+        }
+        .text-light {
+            color: var(--text-light) !important;
+        }
+        .list-group-item {
+            border: none !important;
+            padding: 15px 20px !important;
+            margin-bottom: 0 !important;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .list-group-item:hover {
+            background-color: var(--bg-light) !important;
+        }
+        .list-group-item h5 {
+            color: var(--text-dark);
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        .list-group-flush > .list-group-item:last-child {
+            border-bottom-right-radius: 16px; /* Match card radius */
+            border-bottom-left-radius: 16px; /* Match card radius */
+        }
+        .table {
+            color: var(--text-dark) !important;
+        }
+        .table thead th {
+            border-bottom: 1px solid var(--border-light) !important;
+            color: var(--text-light);
+            font-weight: 600;
+            padding: 12px 20px;
+        }
+        .table tbody td {
+            border-top: 1px solid var(--border-light) !important;
+            padding: 12px 20px;
+        }
+        .table-hover tbody tr:hover {
+            background-color: var(--bg-light) !important;
+        }
+
+        /* Chart.js overrides */
+        .chartjs-render-monitor {
+            background-color: var(--white);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .chartjs-tooltip {
+            background-color: rgba(31, 41, 55, 0.9) !important; /* Dark tooltip */
+            color: #fff !important;
+            border-radius: 5px !important;
+            padding: 8px 12px !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+        .chartjs-tooltip-header-inner {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i class="bi bi-person-fill-gear logo-icon"></i>
+                <h3>Student Tracker</h3>
+            </div>
+            <div class="sidebar-menu">
+                <ul>
+                    <li>
+                        <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">
+                            <i class="bi bi-house-fill"></i> Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('analysis_dashboard') }}" class="{% if request.endpoint == 'analysis_dashboard' %}active{% endif %}">
+                            <i class="bi bi-graph-up-arrow"></i> Analytics
+                        </a>
+                    </li>
+                    {# Agar aap aur links add karna chahein #}
+                </ul>
+            </div>
+            <div class="user-profile-sidebar">
+                <img src="pic.png" alt="User Avatar"> 
+                <div class="user-info">
+                    <span>Prakhar</span>
+                    <small>Admin</small>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-content">
+            <header class="main-header">
+                <h2 class="page-title">{% block page_heading %}{% endblock %}</h2>
+                <div class="header-controls">
+                    <div class="search-bar">
+                        <i class="bi bi-search"></i>
+                        <input type="text" placeholder="Search...">
+                    </div>
+                    <div class="icon-btn me-3"><i class="bi bi-bell-fill"></i></div> {# Notification icon #}
+                    <img class="user-avatar" src="pic.png" alt="User Avatar">
+                </div>
+            </header>
+
+            <div class="container-fluid px-0"> {# Container-fluid to ensure alerts span full width #}
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>

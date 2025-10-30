@@ -1,0 +1,14 @@
+# Python
+*.pyc
+__pycache__/
+*.env
+.venv
+venv/
+
+# Database
+*.db
+*.db-journal
+students.db
+
+# OS
+.DS_Store
